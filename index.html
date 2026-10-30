@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Spartan 401(k)</title>
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="401(k)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: Spartan ledger · navy + gold. Sticky tab bar, one question per panel. */
+:root{
+  --bg:#0b1220; --panel:#121b2e; --panel2:#18233a; --ink:#e8edf5; --muted:#8c98ad; --line:#24314b;
+  --gold:#d4a63a; --gold-soft:rgba(212,166,58,.14); --gain:#3fbf7f; --loss:#e5675b; --flow:#7b8cff; --teal:#3fb6b0;
+  --f-disp:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-ui:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-ui)}
+.wrap{max-width:1000px;margin:0 auto;padding-block:14px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:10px}
+h1{margin:0;font:700 28px/1.05 var(--f-disp);letter-spacing:.02em;text-transform:uppercase}
+h1 small{display:block;font:500 11px var(--f-num);letter-spacing:.14em;color:var(--gold);margin-bottom:4px}
+h2{margin:0 0 4px;font:600 18px var(--f-disp);letter-spacing:.04em;text-transform:uppercase}
+.hint{margin:0 0 12px;color:var(--muted);font-size:13px;max-width:64ch}
+.status{font-size:13px;color:var(--muted)}
+.up{color:var(--gain)}.dn{color:var(--loss)}
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;gap:4px;overflow-x:auto;background:var(--bg);padding:6px 0;border-bottom:1px solid var(--line);scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;font:600 14px var(--f-disp);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;padding:8px 12px;cursor:pointer}
+.tab.on{color:var(--gold);border-bottom-color:var(--gold)}
+.tab:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.savebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.savebar.dirty{border-color:var(--loss);box-shadow:inset 4px 0 0 var(--loss)}
+.savebar>div{display:grid;gap:2px;min-width:0}
+.btn{font:600 14px var(--f-ui);border:0;border-radius:8px;padding:9px 14px;background:var(--gold);color:#1a1405;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media(min-width:760px){.strip{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.stat{background:var(--panel);padding:13px 14px}
+.stat .l{font:600 11px var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:500 21px var(--f-num);margin-top:4px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:12.5px;color:var(--muted);margin-top:2px}
+.cv{position:relative;height:260px}.cv.tall{height:320px}.cv.short{height:220px}.cv.xtall{height:440px}
+.grid2{display:grid;gap:14px}@media(min-width:840px){.grid2{grid-template-columns:1fr 1fr}}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font:600 10.5px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+th:first-child,td:first-child{text-align:left}
+td .sub{display:block;font-size:11px;color:var(--muted);max-width:170px;overflow:hidden;text-overflow:ellipsis}
+td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+tr.tot td{border-top:1px solid var(--gold);font-weight:600}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--gold-soft);color:var(--gold)}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(min-width:760px){.form{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.form input{font:14px var(--f-num);color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:7px 8px;width:100%}
+input[type=date]{font:13px var(--f-num);color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+.x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:4px 6px;border-radius:6px}
+.x.arm{background:var(--loss);color:#fff}
+.drop{border:1.5px dashed var(--gold);background:var(--gold-soft);border-radius:10px;padding:16px;display:grid;gap:8px;justify-items:start}
+.paste{width:100%}.paste summary{cursor:pointer;font-size:13px;color:var(--gold);font-weight:600}
+#pasteBox{width:100%;font:12px var(--f-num);color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px}
+.prow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+[data-panel]{display:grid;gap:14px}
+[hidden]{display:none!important}
+.brand{display:flex;align-items:center;gap:12px}.brand img{width:44px;height:44px;border-radius:11px;flex:0 0 auto}
+.savebar>.bar-btns{display:flex;gap:8px;flex-wrap:wrap}
+.welcome{display:grid;gap:10px;justify-items:start}
+.callout{border-left:3px solid var(--gold);padding:8px 12px;background:var(--gold-soft);border-radius:0 8px 8px 0;font-size:13.5px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><img src="icon-192.png" alt=""><h1><small>BPAS · InvestmentDetail</small>Spartan 401<span style="text-transform:none">(k)</span></h1></div>
+    <span class="status" id="store"></span>
+  </header>
+
+  <section class="savebar" id="savebar">
+    <div><b id="saveTitle">Todo guardado</b><span class="status" id="saveSub"></span></div>
+    <div class="bar-btns">
+      <button class="btn ghost" id="installBtn" type="button" hidden>Instalar app</button>
+      <label class="btn ghost" for="restoreFile">Restaurar</label>
+      <button class="btn" id="saveBtn" type="button">Respaldo</button>
+    </div>
+    <input id="restoreFile" class="vh" type="file" accept=".json,.html,application/json,text/html">
+  </section>
+
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab on" data-tab="resumen" role="tab">Resumen</button>
+    <button class="tab" data-tab="aportes" role="tab">Aportes vs fondos</button>
+    <button class="tab" data-tab="fondos" role="tab">Fondos</button>
+    <button class="tab" data-tab="proyeccion" role="tab">Proyección</button>
+    <button class="tab" data-tab="descargas" role="tab">Descargas</button>
+  </nav>
+
+  <!-- RESUMEN -->
+  <div data-panel="resumen">
+    <section class="strip" id="strip"></section>
+    <section class="panel">
+      <h2>Valor de la cuenta</h2>
+      <p class="hint">Cada punto es una descarga. La línea punteada es lo que tendrías solo con lo que entró; la distancia es lo que hizo el mercado.</p>
+      <div class="cv"><canvas id="cValue"></canvas></div>
+    </section>
+    <div class="grid2">
+      <section class="panel">
+        <h2>Qué movió cada período</h2>
+        <p class="hint">Mercado = cambio de precio de lo que ya tenías. Entradas = aportes + dividendos.</p>
+        <div class="cv short"><canvas id="cPeriods"></canvas></div>
+      </section>
+      <section class="panel">
+        <h2>Cómo está repartido</h2>
+        <p class="hint">Por categoría, según la última descarga.</p>
+        <div class="cv short"><canvas id="cAlloc"></canvas></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- APORTES VS FONDOS -->
+  <div data-panel="aportes" hidden>
+    <section class="panel">
+      <h2>Lo que entró vs lo que ganó cada fondo</h2>
+      <p class="hint">Entró = acciones nuevas compradas con aportes y dividendos (a precio de ese día). Mercado = ganancia o pérdida por precio. Los cambios de fondo (reasignaciones) se cuentan aparte: lo que salió de los fondos vendidos entró a los nuevos, por eso esa columna suma casi cero.</p>
+      <div class="cv xtall"><canvas id="cFundFlow"></canvas></div>
+      <div class="tw" style="margin-top:12px"><table id="tFlow"></table></div>
+    </section>
+    <section class="panel">
+      <h2>A dónde va cada aporte vs dónde está tu dinero</h2>
+      <p class="hint">Elección = % de cada aporte nuevo que va al fondo. Peso = % del balance. Una diferencia grande cambia tu mezcla con el tiempo.</p>
+      <div class="cv xtall"><canvas id="cElect"></canvas></div>
+    </section>
+    <section class="panel">
+      <h2>Entradas por descarga</h2>
+      <div class="cv short"><canvas id="cInflow"></canvas></div>
+      <p class="note" id="inflowNote"></p>
+    </section>
+  </div>
+
+  <!-- FONDOS -->
+  <div data-panel="fondos" hidden>
+    <section class="panel">
+      <h2>Rendimiento por fondo</h2>
+      <p class="hint">Cambio de precio desde la primera descarga donde aparece cada fondo.</p>
+      <div class="cv tall"><canvas id="cFunds"></canvas></div>
+    </section>
+    <section class="panel">
+      <h2>Precio de cada fondo en el tiempo</h2>
+      <p class="hint">Base 100 en la primera descarga del fondo.</p>
+      <div class="cv tall"><canvas id="cPrices"></canvas></div>
+    </section>
+    <section class="panel">
+      <h2>Fondos · última descarga</h2>
+      <div class="tw"><table id="tFunds"></table></div>
+      <p class="note">Ganancia = solo efecto de precio, sumando todos los períodos.</p>
+    </section>
+  </div>
+
+  <!-- PROYECCION -->
+  <div data-panel="proyeccion" hidden>
+    <section class="panel">
+      <h2>Tus aportes</h2>
+      <p class="hint">Valores de tu pantalla de BPAS. Cámbialos y la proyección se recalcula; se guardan solos en la app.</p>
+      <div class="form" id="form">
+        <label>Sueldo bruto por semana ($)<input id="p_wage" type="number" step="1" inputmode="decimal"></label>
+        <label>Aporte antes de impuestos (%)<input id="p_pre" type="number" step="0.5"></label>
+        <label>Aporte después de impuestos (%)<input id="p_post" type="number" step="0.5"></label>
+        <label>Match de la compañía (% del sueldo)<input id="p_match" type="number" step="0.1"></label>
+        <label>Aumento automático por año (%)<input id="p_auto" type="number" step="0.5"></label>
+        <label>Meta antes de impuestos (%)<input id="p_preT" type="number" step="0.5"></label>
+        <label>Meta después de impuestos (%)<input id="p_postT" type="number" step="0.5"></label>
+        <label>Aumento de sueldo anual (%)<input id="p_raise" type="number" step="0.5"></label>
+        <label>Años a proyectar<input id="p_years" type="number" step="1" min="1" max="40"></label>
+        <label>Retorno pesimista (%)<input id="p_rLo" type="number" step="0.5"></label>
+        <label>Retorno base (%)<input id="p_rMid" type="number" step="0.5"></label>
+        <label>Retorno optimista (%)<input id="p_rHi" type="number" step="0.5"></label>
+      </div>
+    </section>
+    <section class="strip" id="projStrip"></section>
+    <section class="panel">
+      <h2>Cuánto puede generar</h2>
+      <p class="hint">Desde el valor de tu última descarga. Los retornos son supuestos anuales después de costos, no promesas.</p>
+      <div class="cv tall"><canvas id="cProj"></canvas></div>
+      <div class="callout" id="trendNote" style="margin-top:12px"></div>
+    </section>
+    <section class="panel">
+      <h2>Año por año</h2>
+      <div class="tw"><table id="tProj"></table></div>
+    </section>
+  </div>
+
+  <!-- DESCARGAS -->
+  <div data-panel="descargas" hidden>
+    <section class="drop" id="drop">
+      <h2>Sube tus CSV de BPAS</h2>
+      <p class="hint">Escoge uno o varios. La app los ordena por fecha, ignora repetidos y lo guarda solo.</p>
+      <label class="btn" for="file">Escoger CSV</label>
+      <input id="file" class="vh" type="file" multiple>
+      <span class="status" id="msg"></span>
+      <details class="paste">
+        <summary>¿El botón no abre? Pega el CSV aquí</summary>
+        <textarea id="pasteBox" rows="5" placeholder='"Investment","Investment Category","Ticker",…'></textarea>
+        <div class="prow"><input type="date" id="pasteDate" aria-label="Fecha"><button class="btn" id="pasteBtn" type="button">Agregar</button></div>
+      </details>
+    </section>
+    <section class="panel">
+      <h2>Todas tus descargas</h2>
+      <div class="tw"><table id="tSnaps"></table></div>
+      <p class="note">Toca la fecha para corregirla.</p>
+    </section>
+  </div>
+</div>
+
+
+<script>
+const $=id=>document.getElementById(id);
+const f$=v=>v==null?'—':'$'+Math.round(v).toLocaleString('en-US');
+const f$2=v=>v==null?'—':'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const s$=v=>v==null?'—':(v>=0?'+':'−')+'$'+Math.abs(Math.round(v)).toLocaleString('en-US');
+const pct=v=>v==null||!isFinite(v)?'—':(v>=0?'+':'')+v.toFixed(2)+'%';
+const cls=v=>v==null?'':v>=0?'up':'dn';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const C={gold:'#d4a63a',gain:'#3fbf7f',loss:'#e5675b',flow:'#7b8cff',teal:'#3fb6b0',muted:'#8c98ad',line:'#24314b',ink:'#e8edf5'};
+const SHORT={VINIX:'S&P 500',VIMAX:'Mid-Cap índice',VTIAX:'Internacional total',TRTIX:'Intl. valor',PMJIX:'Small-cap valor',DOXIX:'Bonos Dodge&Cox',VEIRX:'Dividendos',VSMAX:'Small-cap índice',VBTLX:'Bonos índice',JLGMX:'Large-cap crecimiento',RPTTX:'Mid-cap crecimiento',RFITX:'Target 2050',TRJLX:'Target 2050 TRP',BPRCAX:'Preservación capital',RLBGX:'Balanceado',VEVRX:'Mid-cap valor',RERGX:'EuroPacific'};
+const lbl=t=>SHORT[t]?`${t} · ${SHORT[t]}`:t;
+const PAL=['#d4a63a','#3fb6b0','#7b8cff','#3fbf7f','#e5675b','#c58be0','#5aa0d8','#e8935a','#9fb85a','#d46aa8','#8c98ad','#e0c36a'];
+const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+
+/* ---------- storage: lives in this phone (localStorage) + backup file ---------- */
+const DEF={wage:719,pre:10,post:1,match:3.4,auto:1,preT:15,postT:5,raise:2,years:25,rLo:4,rMid:6.5,rHi:9};
+const KEY='spartan401k.app';
+let snaps=[],dirty=false,S={...DEF},lastBackup=null,changedAt=null;
+const charts={};
+try{const st=JSON.parse(localStorage.getItem(KEY)||'null');if(st){snaps=st.snaps||[];Object.assign(S,st.S||{});lastBackup=st.lastBackup||null;changedAt=st.changedAt||null}}catch(e){}
+const lsSave=()=>{try{localStorage.setItem(KEY,JSON.stringify({snaps,S,lastBackup,changedAt}));return true}catch(e){return false}};
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+function markDirty(v){
+  const need=snaps.length&&(!lastBackup||(changedAt&&changedAt>lastBackup));dirty=!!need;
+  $('savebar').classList.toggle('dirty',dirty);
+  $('saveTitle').textContent=snaps.length?(dirty?'Guardado en el teléfono · falta respaldo':'Todo guardado y respaldado'):'Bienvenido';
+  $('saveSub').textContent=snaps.length?(lastBackup?`Último respaldo: ${lastBackup.slice(0,10)}. `:'')+(dirty?'Toca Respaldo para bajar una copia por si borras el app.':'Se guarda solo cada vez que subes un CSV.'):'Toca Restaurar y escoge tu respaldo o tu último Spartan-401k.html.';
+  $('store').textContent=`${snaps.length} descargas`}
+function changed(){changedAt=new Date().toISOString();lsSave();markDirty();renderAll()}
+$('saveBtn').addEventListener('click',()=>{
+  if(!snaps.length){$('saveSub').textContent='Todavía no hay datos para respaldar.';return}
+  const name='Spartan-401k-respaldo-'+iso(new Date())+'.json';
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({app:'spartan401k',v:3,saved:new Date().toISOString(),snaps,S},null,1)],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);lastBackup=new Date().toISOString();lsSave();markDirty();$('saveSub').textContent=`Bajé ${name}. Guárdalo en Drive o en tu teléfono.`}catch(e){$('saveSub').textContent='No pude bajar el respaldo; intenta otra vez'}
+});
+$('restoreFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  let data=null;try{const t=await f.text();
+    if(/^\s*[\[{]/.test(t)){data=JSON.parse(t)}
+    else{const doc=new DOMParser().parseFromString(t,'text/html');const sv=doc.getElementById('saved'),se=doc.getElementById('settings');
+      data={snaps:JSON.parse(sv?sv.textContent:'[]'),S:se?JSON.parse(se.textContent||'{}'):{}}}
+    if(Array.isArray(data))data={snaps:data};
+  }catch(err){data=null}
+  if(!data||!Array.isArray(data.snaps)){$('saveSub').textContent='Ese archivo no es un respaldo del 401(k).';return}
+  let add=0;data.snaps.forEach(x=>{if(x&&x.holdings&&!snaps.some(s=>s.id===x.id)){snaps.push(x);add++}});
+  if(data.S&&Object.keys(data.S).length){Object.assign(S,data.S);PF.forEach(k=>{const el=$('p_'+k);if(el)el.value=S[k]})}
+  changed();$('saveSub').textContent=`Restauré ${add} descarga${add==1?'':'s'} nueva${add==1?'':'s'} (${snaps.length} en total).`});
+let deferred=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('installBtn').hidden=false});
+$('installBtn').addEventListener('click',async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice}catch(e){}deferred=null;$('installBtn').hidden=true});
+window.addEventListener('appinstalled',()=>{$('installBtn').hidden=true});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+/* ---------- CSV ---------- */
+function parseCSV(t){const R=[];let r=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++}else q=false}else f+=c}else if(c=='"')q=true;else if(c==','){r.push(f);f=''}
+  else if(c=='\n'||c=='\r'){if(c=='\r'&&t[i+1]=='\n')i++;r.push(f);R.push(r);r=[];f=''}else f+=c}
+  if(f||r.length){r.push(f);R.push(r)}return R.filter(x=>x.some(y=>y.trim()))}
+const money=s=>{const v=parseFloat(String(s||'').replace(/[$,%\s]/g,''));return isFinite(v)?v:null};
+function dateFromName(n){let m=n.match(/(20\d\d)[-_.](\d\d)[-_.](\d\d)/);if(m)return`${m[1]}-${m[2]}-${m[3]}`;m=n.match(/(\d\d)[-_.](\d\d)[-_.](20\d\d)/);if(m)return`${m[3]}-${m[1]}-${m[2]}`;return null}
+function toSnap(text,file){const r=parseCSV(text.replace(/^﻿/,''));if(r.length<2)return null;
+  const h=r[0].map(x=>x.trim().toLowerCase()),ix=k=>h.findIndex(x=>x.includes(k));
+  const iT=ix('ticker'),iV=ix('market value'),iS=ix('shares'),iP=ix('price'),iN=ix('investment'),iC=ix('category'),iE=ix('election');
+  if(iT<0||iV<0)return null;
+  const holdings=r.slice(1).map(c=>({t:(c[iT]||'').trim().toUpperCase(),name:(c[iN]||'').trim(),cat:iC>=0?(c[iC]||'').trim():'',value:money(c[iV])||0,shares:money(c[iS])||0,price:money(c[iP]),elect:iE>=0?money(c[iE])||0:0})).filter(x=>x.t);
+  if(!holdings.length)return null;
+  const date=dateFromName(file.name)||iso(new Date(file.lastModified||Date.now()));
+  const key=holdings.map(x=>x.t+':'+x.shares.toFixed(3)+':'+(x.price||0)).sort().join('|');let hs=0;for(const ch of key)hs=(hs*31+ch.charCodeAt(0))|0;
+  return{id:'s'+(hs>>>0).toString(36),date,file:file.name,total:+holdings.reduce((a,x)=>a+x.value,0).toFixed(2),holdings,added:Date.now()}}
+async function handle(files){let ok=0,dup=0,bad=0;$('msg').textContent=files.length?`Leyendo ${files.length}…`:'No escogiste archivos';
+  for(const f of files){let s=null;try{s=toSnap(await f.text(),f)}catch(e){}if(!s){bad++;continue}if(snaps.some(x=>x.id===s.id)){dup++;continue}snaps.push(s);ok++}
+  $('msg').textContent=[ok&&`${ok} agregado${ok>1?'s':''}`,dup&&`${dup} repetido${dup>1?'s':''}`,bad&&`${bad} no se pudo leer`].filter(Boolean).join(' · ');$('file').value='';if(ok)changed()}
+$('file').addEventListener('change',e=>handle([...e.target.files]));
+try{$('pasteDate').value=iso(new Date())}catch(e){}
+$('pasteBtn').addEventListener('click',async()=>{const t=$('pasteBox').value.trim();if(!t){$('msg').textContent='Pega el CSV primero';return}
+  await handle([{name:($('pasteDate').value||iso(new Date()))+'.csv',lastModified:Date.now(),text:async()=>t}]);if(/agregado|repetido/.test($('msg').textContent))$('pasteBox').value=''});
+
+/* ---------- analysis ---------- */
+function analyze(){
+  const Sn=snaps.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.added-b.added);
+  const periods=[],fund={};let twr=1,flows=0;const base=[Sn[0].total];
+  const touch=(t,h,d)=>fund[t]||(fund[t]={t,name:h.name,cat:h.cat,first:h.price,firstDate:d,pnl:0,inflow:0,swap:0,prices:{}});
+  Sn[0].holdings.forEach(h=>{touch(h.t,h,Sn[0].date).prices[Sn[0].date]=h.price});
+  for(let i=1;i<Sn.length;i++){const A=Sn[i-1],B=Sn[i],pa={},pb={};A.holdings.forEach(h=>pa[h.t]=h);B.holdings.forEach(h=>pb[h.t]=h);
+    let mkt=0;const perFund={};
+    const tick=new Set([...Object.keys(pa),...Object.keys(pb)]);
+    tick.forEach(t=>{const a=pa[t],b=pb[t];const F=touch(t,b||a,b?B.date:A.date);if(b)F.prices[B.date]=b.price;if(b&&!F.name)F.name=b.name;
+      const g=(a&&b&&a.price!=null&&b.price!=null)?a.shares*(b.price-a.price):0;mkt+=g;F.pnl+=g;
+      const bVal=b?b.value:0,aVal=a?a.value:0;perFund[t]=bVal-aVal-g});
+    const flow=B.total-A.total-mkt;flows+=flow;
+    // reallocation detection: gross per-fund moves much larger than net flow
+    const gross=Object.values(perFund).reduce((s,v)=>s+Math.abs(v),0);const swap=gross>Math.max(500,4*Math.abs(flow));
+    Object.entries(perFund).forEach(([t,v])=>{if(swap)fund[t].swap+=v;else fund[t].inflow+=v});
+    const r=A.total?mkt/A.total:0;twr*=1+r;
+    periods.push({from:A.date,to:B.date,days:Math.round((new Date(B.date)-new Date(A.date))/864e5),mkt,flow,r:r*100,swap});
+    base.push(Sn[0].total+flows)}
+  const L=Sn[Sn.length-1];
+  const rows=L.holdings.map(h=>{const F=fund[h.t]||{};return{...h,weight:L.total?h.value/L.total*100:0,pnl:F.pnl||0,inflow:F.inflow||0,swap:F.swap||0,
+    chg:F.first&&h.price?(h.price/F.first-1)*100:null,since:F.firstDate}}).sort((a,b)=>b.value-a.value);
+  const days=(new Date(L.date)-new Date(Sn[0].date))/864e5;
+  return{Sn,periods,base,rows,fund,twr:(twr-1)*100,flows,mkt:periods.reduce((a,p)=>a+p.mkt,0),last:L,days,
+    normalFlows:periods.filter(p=>!p.swap).reduce((a,p)=>a+p.flow,0),normalDays:periods.filter(p=>!p.swap).reduce((a,p)=>a+p.days,0)}}
+
+/* ---------- charts ---------- */
+if(window.Chart){Chart.defaults.color=C.muted;Chart.defaults.borderColor=C.line;Chart.defaults.font.family='Barlow, system-ui, sans-serif';Chart.defaults.font.size=11}
+function chart(id,cfg){charts[id]&&charts[id].destroy();if(window.Chart&&$(id))charts[id]=new Chart($(id),cfg)}
+const money$=v=>'$'+(Math.abs(v)>=1000?(v/1000).toFixed(Math.abs(v)>=1e5?0:1)+'k':Math.round(v));
+const baseOpts=(yfmt=money$)=>({maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{boxWidth:10,color:C.ink}}},
+  scales:{x:{grid:{display:false},ticks:{maxTicksLimit:7,maxRotation:0}},y:{grid:{color:C.line},ticks:{callback:yfmt}}}});
+
+const hOpts=(xfmt)=>({maintainAspectRatio:false,indexAxis:'y',interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{boxWidth:10,color:C.ink}}},
+  scales:{x:{grid:{color:C.line},ticks:{maxTicksLimit:5,maxRotation:0,callback:xfmt}},y:{grid:{display:false},ticks:{autoSkip:false,color:C.ink,font:{size:10.5}}}}});
+let A=null,tab='resumen';
+function renderAll(){if(!snaps.length){$('strip').innerHTML='<div class="stat" style="grid-column:1/-1"><div class="l">Sin datos todavía</div><div class="s">Toca <b>Restaurar</b> arriba y escoge tu respaldo (.json) o tu último Spartan-401k.html. O ve a Descargas y sube tus CSV de BPAS.</div></div>';return}
+  A=analyze();markDirty();renderTab(tab)}
+function renderTab(t){if(!A)return;({resumen:rResumen,aportes:rAportes,fondos:rFondos,proyeccion:rProj,descargas:rDesc})[t]()}
+$('tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(!b)return;tab=b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==tab);
+  try{localStorage.setItem('spartan401k.tab',tab)}catch(e){}renderTab(tab)});
+
+function rResumen(){const L=A.last,p=A.periods[A.periods.length-1];
+  $('strip').innerHTML=[['Valor',f$2(L.total),'al '+L.date],['Último período',`<span class="${cls(p?.mkt)}">${s$(p?p.mkt:null)}</span>`,p?`mercado · ${pct(p.r)} en ${p.days} días`:'—'],
+    ['Ganó el mercado',`<span class="${cls(A.mkt)}">${s$(A.mkt)}</span>`,`${pct(A.twr)} desde ${A.Sn[0].date}`],['Entradas',s$(A.flows),`aportes + dividendos · ${A.Sn.length} descargas`]]
+    .map(([l,v,s])=>`<div class="stat"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
+  chart('cValue',{type:'line',data:{labels:A.Sn.map(s=>s.date),datasets:[
+    {label:'Valor',data:A.Sn.map(s=>s.total),borderColor:C.gold,backgroundColor:'rgba(212,166,58,.12)',fill:true,borderWidth:2.4,pointRadius:4,pointBackgroundColor:C.gold,tension:.2},
+    {label:'Solo entradas',data:A.base,borderColor:C.flow,borderDash:[5,4],borderWidth:1.5,pointRadius:0}]},options:baseOpts()});
+  chart('cPeriods',{type:'bar',data:{labels:A.periods.map(p=>p.to.slice(5)),datasets:[
+    {label:'Mercado',data:A.periods.map(p=>+p.mkt.toFixed(2)),backgroundColor:A.periods.map(p=>p.mkt>=0?C.gain:C.loss)},
+    {label:'Entradas',data:A.periods.map(p=>+p.flow.toFixed(2)),backgroundColor:C.flow}]},options:baseOpts(v=>'$'+v)});
+  const cat={};A.rows.forEach(r=>{const k=r.cat||'Otro';cat[k]=(cat[k]||0)+r.value});const ck=Object.keys(cat).sort((a,b)=>cat[b]-cat[a]);
+  chart('cAlloc',{type:'doughnut',data:{labels:ck.map(k=>`${k} ${(cat[k]/L.total*100).toFixed(0)}%`),datasets:[{data:ck.map(k=>cat[k]),backgroundColor:PAL,borderColor:'#121b2e',borderWidth:2}]},
+    options:{maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'right',labels:{boxWidth:10,color:C.ink}},tooltip:{callbacks:{label:x=>`${x.label}: ${f$(x.raw)}`}}}}})}
+
+function rAportes(){const R=A.rows.filter(r=>r.value>50);
+  chart('cFundFlow',{type:'bar',data:{labels:R.map(r=>lbl(r.t)),datasets:[
+    {label:'Entró (aportes + dividendos)',data:R.map(r=>+r.inflow.toFixed(2)),backgroundColor:C.flow,stack:'a'},
+    {label:'Mercado',data:R.map(r=>+r.pnl.toFixed(2)),backgroundColor:R.map(r=>r.pnl>=0?C.gain:C.loss),stack:'b'}]},
+    options:hOpts(v=>'$'+v)});
+  const held=new Set(A.last.holdings.map(h=>h.t)),sold=Object.values(A.fund).filter(F=>!held.has(F.t));
+  const soldRow=sold.length?{t:`Vendidos (${sold.length})`,name:sold.map(F=>F.t).join(', '),value:0,inflow:sold.reduce((a,F)=>a+F.inflow,0),pnl:sold.reduce((a,F)=>a+F.pnl,0),swap:sold.reduce((a,F)=>a+F.swap,0),elect:0}:null;
+  const all=soldRow?A.rows.concat([soldRow]):A.rows;
+  const tot=all.reduce((a,r)=>({inflow:a.inflow+r.inflow,pnl:a.pnl+r.pnl,swap:a.swap+r.swap,value:a.value+r.value}),{inflow:0,pnl:0,swap:0,value:0});
+  $('tFlow').innerHTML='<tr><th>Fondo</th><th>Valor hoy</th><th>Entró</th><th>Mercado</th><th>Reasignación</th><th>Elección</th></tr>'+
+    all.map(r=>`<tr><td>${esc(r.t)}<span class="sub">${esc(r.name)}</span></td><td class="n">${f$(r.value)}</td><td class="n">${s$(r.inflow)}</td><td class="n ${cls(r.pnl)}">${s$(r.pnl)}</td><td class="n">${Math.abs(r.swap)>1?s$(r.swap):'—'}</td><td class="n">${r.elect}%</td></tr>`).join('')+
+    `<tr class="tot"><td>Total</td><td class="n">${f$(tot.value)}</td><td class="n">${s$(tot.inflow)}</td><td class="n ${cls(tot.pnl)}">${s$(tot.pnl)}</td><td class="n">${s$(tot.swap)}</td><td class="n">${A.last.holdings.reduce((a,h)=>a+h.elect,0)}%</td></tr>`;
+  const E=A.rows.filter(r=>r.value>50||r.elect>0);
+  chart('cElect',{type:'bar',data:{labels:E.map(r=>lbl(r.t)),datasets:[{label:'Peso en el balance %',data:E.map(r=>+r.weight.toFixed(1)),backgroundColor:C.gold},{label:'Elección de aportes %',data:E.map(r=>r.elect),backgroundColor:C.teal}]},options:hOpts(v=>v+'%')});
+  const P=A.periods.filter(p=>!p.swap);
+  chart('cInflow',{type:'bar',data:{labels:P.map(p=>p.to.slice(5)),datasets:[{label:'Entradas',data:P.map(p=>+p.flow.toFixed(2)),backgroundColor:C.flow}]},options:baseOpts(v=>'$'+v)});
+  const perWk=A.normalDays?A.normalFlows/A.normalDays*7:null;
+  $('inflowNote').textContent=perWk?`Promedio: ${f$2(perWk)} por semana entre descargas (incluye dividendos). Los períodos de reasignación no se cuentan.`:''}
+
+function rFondos(){const fr=A.rows.filter(r=>r.chg!=null&&r.value>50).sort((a,b)=>b.chg-a.chg);
+  chart('cFunds',{type:'bar',data:{labels:fr.map(r=>lbl(r.t)),datasets:[{label:'Cambio de precio',data:fr.map(r=>+r.chg.toFixed(2)),backgroundColor:fr.map(r=>r.chg>=0?C.gain:C.loss)}]},
+    options:{...hOpts(v=>v+'%'),plugins:{legend:{display:false}}}});
+  const dates=A.Sn.map(s=>s.date),top=A.rows.filter(r=>r.value>50);
+  chart('cPrices',{type:'line',data:{labels:dates,datasets:top.map((r,i)=>{const F=A.fund[r.t];const p0=F.first;
+    return{label:lbl(r.t),data:dates.map(d=>F.prices[d]!=null&&p0?+(F.prices[d]/p0*100).toFixed(2):null),borderColor:PAL[i%PAL.length],borderWidth:1.6,pointRadius:2,spanGaps:true}})},
+    options:baseOpts(v=>v)});
+  $('tFunds').innerHTML='<tr><th>Fondo</th><th>Valor</th><th>Peso</th><th>Elección</th><th>Ganancia</th><th>Precio</th><th>Desde</th></tr>'+
+    A.rows.map(r=>`<tr><td>${esc(r.t)}<span class="sub">${esc(r.name)}</span></td><td class="n">${f$(r.value)}</td><td class="n">${r.weight.toFixed(1)}%</td><td class="n">${r.elect}%${Math.abs(r.elect-r.weight)>8?' <span class="pill">≠</span>':''}</td><td class="n ${cls(r.pnl)}">${s$(r.pnl)}</td><td class="n ${cls(r.chg)}">${pct(r.chg)}</td><td class="n">${r.since||''}</td></tr>`).join('')}
+
+/* ---------- projection ---------- */
+const PF=['wage','pre','post','match','auto','preT','postT','raise','years','rLo','rMid','rHi'];
+PF.forEach(k=>{const el=$('p_'+k);el.value=S[k];el.addEventListener('change',()=>{const v=parseFloat(el.value);if(isFinite(v)){S[k]=v;changedAt=new Date().toISOString();lsSave();markDirty();rProj()}})});
+function project(r){const out=[];let v=A.last.total,wage=S.wage*52,pre=S.pre,post=S.post,cum=0;
+  for(let y=1;y<=Math.round(S.years);y++){if(y>1){pre=Math.min(pre+S.auto,Math.max(S.preT,S.pre));post=Math.min(post+S.auto,Math.max(S.postT,S.post));wage*=1+S.raise/100}
+    const c=wage*(pre+post+S.match)/100;cum+=c;v=v*(1+r/100)+c*(1+r/200);out.push({y,v,c,cum,pre,post})}return out}
+function rProj(){const lo=project(S.rLo),mid=project(S.rMid),hi=project(S.rHi),n=mid.length;
+  const base=A.last.total,yr=new Date(A.last.date).getFullYear();
+  $('projStrip').innerHTML=[['Aporte este año',f$(mid[0].c),`${mid[0].pre+mid[0].post}% tuyo + ${S.match}% match`],
+    [`En ${n} años (base)`,f$(mid[n-1].v),`${S.rMid}% al año`],['Rango',`${f$(lo[n-1].v)}–${f$(hi[n-1].v)}`,`${S.rLo}% a ${S.rHi}%`],
+    ['Lo que pondrías',f$(base+mid[n-1].cum),`hoy + aportes; el resto es crecimiento`]]
+    .map(([l,v,s])=>`<div class="stat"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
+  const labels=['Hoy',...mid.map(x=>String(yr+x.y))];
+  chart('cProj',{type:'line',data:{labels,datasets:[
+    {label:`Optimista ${S.rHi}%`,data:[base,...hi.map(x=>x.v)],borderColor:C.gain,borderWidth:1.6,pointRadius:0,fill:false},
+    {label:`Base ${S.rMid}%`,data:[base,...mid.map(x=>x.v)],borderColor:C.gold,borderWidth:2.6,pointRadius:0},
+    {label:`Pesimista ${S.rLo}%`,data:[base,...lo.map(x=>x.v)],borderColor:C.loss,borderWidth:1.6,pointRadius:0},
+    {label:'Solo lo que pones',data:[base,...mid.map(x=>base+x.cum)],borderColor:C.flow,borderDash:[5,4],borderWidth:1.4,pointRadius:0}]},options:baseOpts()});
+  const keep=new Set([1,2,3,5,10,15,20,25,30,35,40,n]);
+  $('tProj').innerHTML='<tr><th>Año</th><th>Tu aporte %</th><th>Entra ese año</th><th>Pesimista</th><th>Base</th><th>Optimista</th></tr>'+
+    mid.filter(x=>keep.has(x.y)).map(x=>`<tr><td>${yr+x.y} <span class="sub">año ${x.y}</span></td><td class="n">${(x.pre+x.post).toFixed(0)}%</td><td class="n">${f$(x.c)}</td><td class="n">${f$(lo[x.y-1].v)}</td><td class="n"><b>${f$(x.v)}</b></td><td class="n">${f$(hi[x.y-1].v)}</td></tr>`).join('');
+  const ann=A.days>0?(Math.pow(1+A.twr/100,365/A.days)-1)*100:null;
+  $('trendNote').innerHTML=A.days<180?`<b>Tu tendencia real:</b> ${pct(A.twr)} en ${Math.round(A.days)} días. Con menos de 6 meses de datos, anualizarla engaña (daría ${pct(ann)} al año), por eso la proyección usa supuestos de largo plazo. Con más descargas, este número se vuelve útil.`
+    :`<b>Tu tendencia real:</b> ${pct(ann)} al año desde ${A.Sn[0].date}. Compárala con el escenario base de ${S.rMid}%.`}
+
+function rDesc(){const per={};A.periods.forEach(p=>per[p.to]=p);
+  $('tSnaps').innerHTML='<tr><th>Fecha</th><th>Total</th><th>Mercado</th><th>Entradas</th><th>Días</th><th></th></tr>'+
+    A.Sn.slice().reverse().map(s=>{const p=per[s.date];return`<tr><td><input type="date" value="${s.date}" data-id="${s.id}" aria-label="Fecha de ${esc(s.file)}"><span class="sub">${esc(s.file)}${p&&p.swap?' · reasignación':''}</span></td><td class="n">${f$2(s.total)}</td><td class="n ${cls(p?.mkt)}">${p?s$(p.mkt):'—'}</td><td class="n">${p?s$(p.flow):'—'}</td><td class="n">${p?p.days:''}</td><td><button class="x" data-del="${s.id}">Borrar</button></td></tr>`}).join('')}
+$('tSnaps').addEventListener('change',e=>{const s=snaps.find(x=>x.id===e.target.dataset.id);if(s&&e.target.value){s.date=e.target.value;changed();$('msg').textContent='Fecha actualizada'}});
+$('tSnaps').addEventListener('click',e=>{const b=e.target.closest('[data-del]');if(!b)return;
+  if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='¿Seguro?';setTimeout(()=>{b.classList.remove('arm');b.textContent='Borrar'},3000);return}
+  snaps=snaps.filter(x=>x.id!==b.dataset.del);changed()});
+
+try{const t=localStorage.getItem('spartan401k.tab');if(t&&document.querySelector(`.tab[data-tab="${t}"]`))document.querySelector(`.tab[data-tab="${t}"]`).click()}catch(e){}
+markDirty();renderAll();
+</script>
+</body>
+</html>
